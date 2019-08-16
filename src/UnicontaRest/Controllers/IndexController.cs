@@ -1,4 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using Uniconta.DataModel;
 
@@ -19,6 +21,11 @@ namespace UnicontaRest.Controllers
 
             public string QueryEndpoint { get; } = "/Companies/:companyId/Query/:type";
             public string CrudEndpoint { get; } = "/Companies/:companyId/Crud/:type";
+
+            public Dictionary<string, string[]> Enums { get; } = 
+                typeof(Debtor).Assembly.ExportedTypes
+                    .Where(x => x.IsEnum)
+                    .ToDictionary(x => x.Name, x => Enum.GetNames(x));
             public string[] Types { get; } =
                 typeof(Debtor).Assembly.ExportedTypes
                     .Where(x => !x.IsAbstract)
