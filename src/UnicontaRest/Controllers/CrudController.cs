@@ -8,7 +8,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using Uniconta.API.System;
 using Uniconta.Common;
-using Uniconta.DataModel;
 
 namespace UnicontaRest.Controllers
 {

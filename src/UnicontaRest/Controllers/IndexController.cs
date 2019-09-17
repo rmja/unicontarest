@@ -21,6 +21,7 @@ namespace UnicontaRest.Controllers
 
             public string QueryEndpoint { get; } = "/Companies/:companyId/Query/:type";
             public string CrudEndpoint { get; } = "/Companies/:companyId/Crud/:type";
+            public string InvoiceOrderEndpoint { get; } = "/Companies/:companyId/Invoice/Order/:orderNumber";
 
             public Dictionary<string, string[]> Enums { get; } = 
                 typeof(Debtor).Assembly.ExportedTypes
