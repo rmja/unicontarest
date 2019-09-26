@@ -47,7 +47,7 @@ namespace UnicontaRest.Controllers
         }
 
         [HttpPatch]
-        public async Task<ActionResult> Update(Dictionary<string, string> filter, int limit, JsonPatchDocument patch)
+        public async Task<ActionResult> Update([FromQuery] Dictionary<string, string> filter, int limit, JsonPatchDocument patch)
         {
             var predicates = filter.Select(x => PropValuePairEx.GenereteWhereElements(Type, x.Key, x.Value)).ToList();
 
@@ -77,7 +77,7 @@ namespace UnicontaRest.Controllers
         }
 
         [HttpDelete]
-        public async Task<ActionResult> Delete(Dictionary<string, string> filter, int limit)
+        public async Task<ActionResult> Delete([FromQuery] Dictionary<string, string> filter, int limit)
         {
             var predicates = filter.Select(x => PropValuePairEx.GenereteWhereElements(Type, x.Key, x.Value)).ToList();
 
