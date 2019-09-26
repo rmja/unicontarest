@@ -1,9 +1,5 @@
 ﻿using Microsoft.AspNetCore.Routing;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace UnicontaRest
 {
@@ -13,7 +9,7 @@ namespace UnicontaRest
         {
             if (values.TryGetValue(key, out var @objectValue))
             {
-                if (objectValue == default)
+                if (objectValue is null)
                 {
                     value = default;
                     return true;
@@ -30,6 +26,11 @@ namespace UnicontaRest
 
             value = default;
             return false;
+        }
+
+        public static T GetValueOrDefault<T>(this RouteValueDictionary values, string key, T defaultValue = default)
+        {
+            return TryGetValue<T>(values, key, out var value) ? value : defaultValue;
         }
     }
 }

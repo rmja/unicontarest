@@ -22,6 +22,7 @@ namespace UnicontaRest
             services.Configure<UnicontaRestOptions>(Configuration);
 
             services
+                .AddMemoryCache()
                 .AddControllers()
                     .AddNewtonsoftJson(options =>
                     {
