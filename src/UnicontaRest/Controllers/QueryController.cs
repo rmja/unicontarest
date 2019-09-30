@@ -12,7 +12,7 @@ namespace UnicontaRest.Controllers
     public class QueryController : UnicontaControllerBase
     {
         [HttpGet]
-        public async Task<ActionResult<object>> Get(Dictionary<string, string> filter)
+        public async Task<ActionResult<object>> Get([FromQuery] Dictionary<string, string> filter)
         {
             var predicates = filter.Select(x => PropValuePairEx.GenereteWhereElements(Type, x.Key, x.Value)).ToList();
 
