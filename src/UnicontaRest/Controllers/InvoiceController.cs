@@ -12,8 +12,9 @@ namespace UnicontaRest.Controllers
     [ApiController]
     public class InvoiceController : UnicontaControllerBase
     {
-        [HttpPost("Orders/{orderNumber:int}")]
-        public async Task<ActionResult<InvoicePostingResult>> CreateInvoice(int orderNumber, bool simulate = false)
+        [HttpPost("Orders/{orderNumber:int}")] // Legacy
+        [HttpPost("DebtorOrders/{orderNumber:int}")]
+        public async Task<ActionResult<InvoicePostingResult>> CreateDebtorInvoice(int orderNumber, bool simulate = false)
         {
             var crudApi = new CrudAPI(Session, Company);
             var invoiceApi = new InvoiceAPI(Session, Company);
@@ -27,6 +28,32 @@ namespace UnicontaRest.Controllers
             }
 
             var orderLines = await crudApi.Query<DebtorOrderLineClient>(order);
+
+            var invoice = await invoiceApi.PostInvoice(order, orderLines, DateTime.Now, InvoiceNumber: 0, Simulate: simulate);
+
+            if (invoice.Err != ErrorCodes.Succes)
+            {
+                return StatusCode(500, invoice.Err);
+            }
+
+            return Ok(invoice);
+        }
+
+        [HttpPost("CreditorOrders/{orderNumber:int}")]
+        public async Task<ActionResult<InvoicePostingResult>> CreateInvoice(int orderNumber, bool simulate = false)
+        {
+            var crudApi = new CrudAPI(Session, Company);
+            var invoiceApi = new InvoiceAPI(Session, Company);
+
+            var order = new CreditorOrderClient() { OrderNumber = orderNumber };
+            var status = await crudApi.Read(order);
+
+            if (status != ErrorCodes.Succes)
+            {
+                return StatusCode(500, status);
+            }
+
+            var orderLines = await crudApi.Query<CreditorOrderLineClient>(order);
 
             var invoice = await invoiceApi.PostInvoice(order, orderLines, DateTime.Now, InvoiceNumber: 0, Simulate: simulate);
 

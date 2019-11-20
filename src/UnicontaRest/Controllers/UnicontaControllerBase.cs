@@ -109,8 +109,7 @@ namespace UnicontaRest.Controllers
 
                 Companies = await Session.GetCompanies();
 
-                item.Session = Session;
-                item.Companies = Companies;
+                item.SetValues(Session, Companies);
             }
             finally
             {
@@ -142,6 +141,12 @@ namespace UnicontaRest.Controllers
             var username = value.Slice(0, indexOfSeparator).ToString();
             var password = value.Slice(indexOfSeparator + 1).ToString();
 
+            if (string.IsNullOrEmpty(username) || string.IsNullOrEmpty(password))
+            {
+                credentials = default;
+                return false;
+            }
+
             credentials = new Credentials(username, password);
             return true;
         }
@@ -156,10 +161,16 @@ namespace UnicontaRest.Controllers
 
         private class SessionCacheItem
         {
-            public Session Session { get; set; }
-            public Company[] Companies { get; set; }
-            public SemaphoreSlim InitializationLock { get; set; } = new SemaphoreSlim(1);
+            public Session Session { get; private set; }
+            public Company[] Companies { get; private set; }
+            public SemaphoreSlim InitializationLock { get; } = new SemaphoreSlim(1);
             public bool IsInitialized => Session is object && Companies is object;
+
+            public void SetValues(Session session, Company[] companies)
+            {
+                Session = session;
+                Companies = companies;
+            }
         }
     }
 }
