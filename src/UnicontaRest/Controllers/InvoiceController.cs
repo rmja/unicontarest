@@ -40,7 +40,7 @@ namespace UnicontaRest.Controllers
         }
 
         [HttpPost("CreditorOrders/{orderNumber:int}")]
-        public async Task<ActionResult<InvoicePostingResult>> CreateInvoice(int orderNumber, bool simulate = false)
+        public async Task<ActionResult<InvoicePostingResult>> CreateInvoice(int orderNumber, long invoiceNumber, bool simulate = false)
         {
             var crudApi = new CrudAPI(Session, Company);
             var invoiceApi = new InvoiceAPI(Session, Company);
@@ -55,7 +55,7 @@ namespace UnicontaRest.Controllers
 
             var orderLines = await crudApi.Query<CreditorOrderLineClient>(order);
 
-            var invoice = await invoiceApi.PostInvoice(order, orderLines, DateTime.Now, InvoiceNumber: 0, Simulate: simulate);
+            var invoice = await invoiceApi.PostInvoice(order, orderLines, DateTime.Now, InvoiceNumber: invoiceNumber, Simulate: simulate);
 
             if (invoice.Err != ErrorCodes.Succes)
             {
