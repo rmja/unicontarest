@@ -17,10 +17,9 @@ namespace UnicontaRest.Controllers
             var predicates = filter.Select(x => PropValuePairEx.GenereteWhereElements(Type, x.Key, x.Value)).ToList();
 
             var api = new QueryAPI(Session, Company);
-            var queryMethod = api.GetType().GetMethods().First(x => x.Name == nameof(QueryAPI.Query) && x.IsGenericMethod && x.GetParameters().FirstOrDefault()?.ParameterType == typeof(IEnumerable<PropValuePair>));
-            var genericQueryMethod = queryMethod.MakeGenericMethod(Type);
-
-            var resultTask = (Task)genericQueryMethod.Invoke(api, new object[] { predicates.AsEnumerable() });
+            var queryMethod = api.GetType().GetMethods().First(x => x.Name == nameof(QueryAPI.QueryReader) && x.IsGenericMethod && x.GetParameters().FirstOrDefault()?.ParameterType == typeof(IEnumerable<PropValuePair>));
+            var genericQueryReaderMethod = queryMethod.MakeGenericMethod(Type);
+            var resultTask = (Task)genericQueryReaderMethod.Invoke(api, new object[] { predicates.AsEnumerable() });
 
             await resultTask;
 
