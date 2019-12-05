@@ -35,6 +35,11 @@ namespace UnicontaRest.Controllers
                 return;
             }
 
+            if (!await EnsureInitialized(context.HttpContext, credentials))
+            {
+                return;
+            }
+
             var routeValues = context.RouteData.Values;
 
             if (routeValues.TryGetValue<string>("typeName", out var typeName))
@@ -48,14 +53,7 @@ namespace UnicontaRest.Controllers
                 }
             }
 
-            var companyId = routeValues.GetValueOrDefault<int?>("companyId");
-
-            if (!await EnsureInitialized(context.HttpContext, credentials, companyId))
-            {
-                return;
-            }
-
-            if (companyId.HasValue)
+            if (routeValues.TryGetValue<int>("companyId", out var companyId))
             {
                 Company = Companies.FirstOrDefault(x => x.CompanyId == companyId);
 
@@ -69,12 +67,11 @@ namespace UnicontaRest.Controllers
             await next();
         }
 
-        private async Task<bool> EnsureInitialized(HttpContext httpContext, Credentials credentials, int? companyId)
+        private async Task<bool> EnsureInitialized(HttpContext httpContext, Credentials credentials)
         {
             var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-            var cacheKey = (credentials, companyId);
 
-            var item = cache.GetOrCreate(cacheKey, entry =>
+            var item = cache.GetOrCreate(credentials, entry =>
             {
                 entry.SetSlidingExpiration(TimeSpan.FromMinutes(60));
                 return new SessionCacheItem();
