@@ -71,7 +71,7 @@ namespace UnicontaRest.Controllers
 
             var item = cache.GetOrCreate(credentials, entry =>
             {
-                entry.SetSlidingExpiration(TimeSpan.FromMinutes(60));
+                entry.SetSlidingExpiration(TimeSpan.FromMinutes(10));
                 return new SessionCacheItem();
             });
 
