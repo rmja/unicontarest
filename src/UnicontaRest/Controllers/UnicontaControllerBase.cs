@@ -4,11 +4,9 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Microsoft.Net.Http.Headers;
 using System;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Uniconta.API.Service;
@@ -29,7 +27,7 @@ namespace UnicontaRest.Controllers
 
         public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            if (!TryGetCredentials(out var credentials))
+            if (!Request.TryGetCredentials(out var credentials))
             { 
                 context.Result = Unauthorized();
                 return;
@@ -116,42 +114,6 @@ namespace UnicontaRest.Controllers
             {
                 item.InitializationLock.Release();
             }
-        }
-
-        private const string BasicSpace = "Basic ";
-
-        private bool TryGetCredentials(out Credentials credentials)
-        {
-            var header = Request.Headers[HeaderNames.Authorization].FirstOrDefault();
-
-            if (header?.StartsWith(BasicSpace, StringComparison.InvariantCultureIgnoreCase) != true)
-            {
-                credentials = default;
-                return false;
-            }
-
-            var value = Encoding.UTF8.GetString(Convert.FromBase64String(header.AsSpan(BasicSpace.Length).ToString())).AsSpan();
-            var indexOfSeparator = value.IndexOf(':');
-
-            if (indexOfSeparator == -1)
-            {
-                credentials = default;
-                return false;
-            }
-
-            var username = value.Slice(0, indexOfSeparator).ToString();
-            var password = value.Slice(indexOfSeparator + 1).ToString();
-
-            credentials = new Credentials(username, password);
-            return true;
-        }
-
-        private readonly struct Credentials
-        {
-            public string Username { get; }
-            public string Password { get; }
-
-            public Credentials(string username, string password) => (Username, Password) = (username, password);
         }
 
         private class SessionCacheItem
