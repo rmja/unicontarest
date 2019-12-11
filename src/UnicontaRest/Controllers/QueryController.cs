@@ -16,10 +16,14 @@ namespace UnicontaRest.Controllers
         {
             var predicates = filter.Select(x => PropValuePairEx.GenereteWhereElements(Type, x.Key, x.Value)).ToList();
 
+            if (predicates.Any(x => x.OrList.Count > 40))
+            {
+                return BadRequest("The maximum number of OR's in a filter is 40");
+            }
+
             var api = new QueryAPI(Session, Company);
             var queryMethod = api.GetType().GetMethods().First(x => x.Name == nameof(QueryAPI.Query) && x.IsGenericMethod && x.GetParameters().FirstOrDefault()?.ParameterType == typeof(IEnumerable<PropValuePair>));
             var genericQueryMethod = queryMethod.MakeGenericMethod(Type);
-
             var resultTask = (Task)genericQueryMethod.Invoke(api, new object[] { predicates.AsEnumerable() });
 
             await resultTask;

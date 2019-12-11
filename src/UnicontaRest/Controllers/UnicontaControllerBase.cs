@@ -33,6 +33,11 @@ namespace UnicontaRest.Controllers
                 return;
             }
 
+            if (!await EnsureInitialized(context.HttpContext, credentials))
+            {
+                return;
+            }
+
             var routeValues = context.RouteData.Values;
 
             if (routeValues.TryGetValue<string>("typeName", out var typeName))
@@ -46,11 +51,7 @@ namespace UnicontaRest.Controllers
                 }
             }
 
-            var companyId = routeValues.GetValueOrDefault<int?>("companyId");
-
-            await EnsureInitialized(context.HttpContext, credentials, companyId);
-
-            if (companyId.HasValue)
+            if (routeValues.TryGetValue<int>("companyId", out var companyId))
             {
                 Company = Companies.FirstOrDefault(x => x.CompanyId == companyId);
 
@@ -64,14 +65,13 @@ namespace UnicontaRest.Controllers
             await next();
         }
 
-        private async Task EnsureInitialized(HttpContext httpContext, Credentials credentials, int? companyId)
+        private async Task<bool> EnsureInitialized(HttpContext httpContext, Credentials credentials)
         {
             var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-            var cacheKey = (credentials, companyId);
 
-            var item = cache.GetOrCreate(cacheKey, entry =>
+            var item = cache.GetOrCreate(credentials, entry =>
             {
-                entry.SetAbsoluteExpiration(TimeSpan.FromMinutes(60));
+                entry.SetSlidingExpiration(TimeSpan.FromMinutes(60));
                 return new SessionCacheItem();
             });
 
@@ -79,10 +79,20 @@ namespace UnicontaRest.Controllers
             {
                 Session = item.Session;
                 Companies = item.Companies;
-                return;
+                return true;
             }
 
+            if (item.WaitingForInitializationLockCount > 20)
+            {
+                httpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                return false;
+            }
+
+            Interlocked.Increment(ref item.WaitingForInitializationLockCount);
+
             await item.InitializationLock.WaitAsync();
+
+            Interlocked.Decrement(ref item.WaitingForInitializationLockCount);
 
             try
             {
@@ -90,7 +100,7 @@ namespace UnicontaRest.Controllers
                 {
                     Session = item.Session;
                     Companies = item.Companies;
-                    return;
+                    return true;
                 }
 
                 var options = httpContext.RequestServices.GetRequiredService<IOptions<UnicontaRestOptions>>().Value;
@@ -102,13 +112,14 @@ namespace UnicontaRest.Controllers
                 if (loggedIn != ErrorCodes.Succes)
                 {
                     httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    return;
+                    return false;
                 }
 
                 Companies = await Session.GetCompanies();
 
-                item.Session = Session;
-                item.Companies = Companies;
+                item.SetValues(Session, Companies);
+
+                return true;
             }
             finally
             {
@@ -118,10 +129,17 @@ namespace UnicontaRest.Controllers
 
         private class SessionCacheItem
         {
-            public Session Session { get; set; }
-            public Company[] Companies { get; set; }
-            public SemaphoreSlim InitializationLock { get; set; } = new SemaphoreSlim(1);
+            public Session Session { get; private set; }
+            public Company[] Companies { get; private set; }
+            public int WaitingForInitializationLockCount;
+            public SemaphoreSlim InitializationLock { get; } = new SemaphoreSlim(1);
             public bool IsInitialized => Session is object && Companies is object;
+
+            public void SetValues(Session session, Company[] companies)
+            {
+                Session = session;
+                Companies = companies;
+            }
         }
     }
 }
