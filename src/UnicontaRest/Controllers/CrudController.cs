@@ -1,10 +1,12 @@
 ﻿using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.WebUtilities;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using Uniconta.API.System;
 using Uniconta.Common;
@@ -20,13 +22,15 @@ namespace UnicontaRest.Controllers
         [HttpPost]
         public async Task<ActionResult> Create()
         {
-            using (var reader = new StreamReader(Request.Body))
+            using (var reader = new HttpRequestStreamReader(Request.Body, Encoding.UTF8))
             using (var jsonReader = new JsonTextReader(reader))
             {
-                var model = (UnicontaBaseEntity)_serializer.Deserialize(jsonReader, Type);
+                var jsonObject = await JObject.LoadAsync(jsonReader, HttpContext.RequestAborted);
 
                 try
                 {
+                    var model = (UnicontaBaseEntity)jsonObject.ToObject(Type, _serializer);
+
                     var api = new CrudAPI(Session, Company);
                     var status = await api.Insert(model);
 
