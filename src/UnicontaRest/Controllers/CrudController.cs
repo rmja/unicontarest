@@ -6,6 +6,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Uniconta.API.System;
@@ -25,18 +26,45 @@ namespace UnicontaRest.Controllers
             using (var reader = new HttpRequestStreamReader(Request.Body, Encoding.UTF8))
             using (var jsonReader = new JsonTextReader(reader))
             {
-                var jsonObject = await JObject.LoadAsync(jsonReader, HttpContext.RequestAborted);
+                if (jsonReader.TokenType == JsonToken.None)
+                {
+                    await jsonReader.ReadAsync(); // Read None
+                }
+
+                var models = new List<UnicontaBaseEntity>();
+
+                if (jsonReader.TokenType == JsonToken.StartObject)
+                {
+                    var jsonObject = await JObject.LoadAsync(jsonReader, HttpContext.RequestAborted);
+
+                    models.Add(ToBaseEntity(jsonObject));
+                }
+                else if (jsonReader.TokenType == JsonToken.StartArray)
+                {
+                    await jsonReader.ReadAsync(); // Read StartArray
+
+                    while (jsonReader.TokenType != JsonToken.EndArray)
+                    {
+                        var jsonObject = await JObject.LoadAsync(jsonReader, HttpContext.RequestAborted);
+
+                        models.Add(ToBaseEntity(jsonObject));
+
+                        await jsonReader.ReadAsync(); // Read EndObject
+                    }
+                }
+                else
+                {
+                    return BadRequest("Object or array is expected");
+                }
 
                 try
                 {
-                    var model = (UnicontaBaseEntity)jsonObject.ToObject(Type, _serializer);
-
                     var api = new CrudAPI(Session, Company);
-                    var status = await api.Insert(model);
+                    var status = await api.Insert(models);
 
                     if (status == ErrorCodes.Succes)
                     {
-                        return Ok(model);
+                        return Ok(models);
                     }
                     else
                     {
@@ -102,6 +130,34 @@ namespace UnicontaRest.Controllers
             else
             {
                 return StatusCode(500, status);
+            }
+        }
+
+        private UnicontaBaseEntity ToBaseEntity(JObject jsonObject)
+        {
+            var entity = (UnicontaBaseEntity)jsonObject.ToObject(Type, _serializer);
+
+            foreach (var jsonProperty in jsonObject.Properties())
+            {
+                var modelProperty = Type.GetProperty(jsonProperty.Name);
+                if (modelProperty != null)
+                {
+                    TrySetBackingField(entity, modelProperty, jsonProperty.First.ToObject<object>());
+                }
+            }
+
+            return entity;
+        }
+
+        private void TrySetBackingField(object instance, PropertyInfo property, object value)
+        {
+            var field =
+                instance.GetType().GetField($"{property.Name}k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic) ??
+                instance.GetType().GetField($"_{property.Name}", BindingFlags.Instance | BindingFlags.NonPublic);
+
+            if (field is object)
+            {
+                field?.SetValue(instance, Convert.ChangeType(value, property.PropertyType));
             }
         }
 
