@@ -5,6 +5,7 @@ using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -33,8 +34,18 @@ namespace UnicontaRest.Controllers
                 return;
             }
 
-            if (!await EnsureInitialized(context.HttpContext, credentials))
+            var connectionProvider = context.HttpContext.RequestServices.GetRequiredService<UnicontaConnectionProvider>();
+
+            try
             {
+                var details = await connectionProvider.GetConnectionAsync(credentials, HttpContext.RequestAborted);
+
+                Session = details.Session;
+                Companies = details.Companies;
+            }
+            catch (Exception)
+            {
+                context.Result = Forbid();
                 return;
             }
 
@@ -65,81 +76,6 @@ namespace UnicontaRest.Controllers
             await next();
         }
 
-        private async Task<bool> EnsureInitialized(HttpContext httpContext, Credentials credentials)
-        {
-            var cache = httpContext.RequestServices.GetRequiredService<IMemoryCache>();
-
-            var item = cache.GetOrCreate(credentials, entry =>
-            {
-                entry.SetSlidingExpiration(TimeSpan.FromMinutes(10));
-                return new SessionCacheItem();
-            });
-
-            if (item.IsInitialized)
-            {
-                Session = item.Session;
-                Companies = item.Companies;
-                return true;
-            }
-
-            if (item.WaitingForInitializationLockCount > 20)
-            {
-                httpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
-                return false;
-            }
-
-            Interlocked.Increment(ref item.WaitingForInitializationLockCount);
-
-            await item.InitializationLock.WaitAsync();
-
-            Interlocked.Decrement(ref item.WaitingForInitializationLockCount);
-
-            try
-            {
-                if (item.IsInitialized)
-                {
-                    Session = item.Session;
-                    Companies = item.Companies;
-                    return true;
-                }
-
-                var options = httpContext.RequestServices.GetRequiredService<IOptions<UnicontaRestOptions>>().Value;
-                var connection = new UnicontaConnection(APITarget.Live);
-                Session = new Session(connection);
-
-                var loggedIn = await Session.LoginAsync(credentials.Username, credentials.Password, LoginType.API, options.AffiliateKey);
-
-                if (loggedIn != ErrorCodes.Succes)
-                {
-                    httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
-                    return false;
-                }
-
-                Companies = await Session.GetCompanies();
-
-                item.SetValues(Session, Companies);
-
-                return true;
-            }
-            finally
-            {
-                item.InitializationLock.Release();
-            }
-        }
-
-        private class SessionCacheItem
-        {
-            public Session Session { get; private set; }
-            public Company[] Companies { get; private set; }
-            public int WaitingForInitializationLockCount;
-            public SemaphoreSlim InitializationLock { get; } = new SemaphoreSlim(1);
-            public bool IsInitialized => Session is object && Companies is object;
-
-            public void SetValues(Session session, Company[] companies)
-            {
-                Session = session;
-                Companies = companies;
-            }
-        }
+        
     }
 }

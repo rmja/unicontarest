@@ -19,6 +19,7 @@ namespace UnicontaRest
 
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddSingleton<UnicontaConnectionProvider>();
             services.Configure<UnicontaRestOptions>(Configuration);
 
             services
