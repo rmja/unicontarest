@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 using System.Reflection;
@@ -28,6 +29,7 @@ namespace UnicontaRest.Controllers
                 return;
             }
 
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<UnicontaControllerBase>>();
             var connectionProvider = context.HttpContext.RequestServices.GetRequiredService<UnicontaConnectionProvider>();
 
             try
@@ -37,10 +39,17 @@ namespace UnicontaRest.Controllers
                 Session = details.Session;
                 Companies = details.Companies;
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                logger.LogWarning(e, "Unable to get uniconta connection for provided credentials");
+
                 context.Result = Forbid();
                 return;
+            }
+
+            if (Session is null || Companies is null)
+            {
+                logger.LogCritical("The uniconta connection is invalid {Session}, {Companies}", Session, Companies);
             }
 
             var routeValues = context.RouteData.Values;
