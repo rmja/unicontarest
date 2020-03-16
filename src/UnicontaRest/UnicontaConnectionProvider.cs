@@ -2,8 +2,6 @@
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Uniconta.API.Service;
@@ -44,7 +42,7 @@ namespace UnicontaRest
 
                     details = await ConnectAsync(credentials, _options.AffiliateKey);
 
-                    entry.SetSlidingExpiration(TimeSpan.FromMinutes(10));
+                    entry.SetAbsoluteExpiration(TimeSpan.FromMinutes(30));
 
                     return details;
                 }

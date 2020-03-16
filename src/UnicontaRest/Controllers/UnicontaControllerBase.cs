@@ -1,18 +1,12 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 using System;
-using System.Collections.Concurrent;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using Uniconta.API.Service;
-using Uniconta.Common;
-using Uniconta.Common.User;
 using Uniconta.DataModel;
 
 namespace UnicontaRest.Controllers
@@ -75,7 +69,5 @@ namespace UnicontaRest.Controllers
 
             await next();
         }
-
-        
     }
 }

@@ -23,58 +23,57 @@ namespace UnicontaRest.Controllers
         [HttpPost]
         public async Task<ActionResult> Create()
         {
-            using (var reader = new HttpRequestStreamReader(Request.Body, Encoding.UTF8))
-            using (var jsonReader = new JsonTextReader(reader))
+            using var reader = new HttpRequestStreamReader(Request.Body, Encoding.UTF8);
+            using var jsonReader = new JsonTextReader(reader);
+
+            if (jsonReader.TokenType == JsonToken.None)
             {
-                if (jsonReader.TokenType == JsonToken.None)
-                {
-                    await jsonReader.ReadAsync(); // Read None
-                }
+                await jsonReader.ReadAsync(); // Read None
+            }
 
-                var models = new List<UnicontaBaseEntity>();
+            var models = new List<UnicontaBaseEntity>();
 
-                if (jsonReader.TokenType == JsonToken.StartObject)
+            if (jsonReader.TokenType == JsonToken.StartObject)
+            {
+                var jsonObject = await JObject.LoadAsync(jsonReader, HttpContext.RequestAborted);
+
+                models.Add(ToBaseEntity(jsonObject));
+            }
+            else if (jsonReader.TokenType == JsonToken.StartArray)
+            {
+                await jsonReader.ReadAsync(); // Read StartArray
+
+                while (jsonReader.TokenType != JsonToken.EndArray)
                 {
                     var jsonObject = await JObject.LoadAsync(jsonReader, HttpContext.RequestAborted);
 
                     models.Add(ToBaseEntity(jsonObject));
+
+                    await jsonReader.ReadAsync(); // Read EndObject
                 }
-                else if (jsonReader.TokenType == JsonToken.StartArray)
+            }
+            else
+            {
+                return BadRequest("Object or array is expected");
+            }
+
+            try
+            {
+                var api = new CrudAPI(Session, Company);
+                var status = await api.Insert(models);
+
+                if (status == ErrorCodes.Succes)
                 {
-                    await jsonReader.ReadAsync(); // Read StartArray
-
-                    while (jsonReader.TokenType != JsonToken.EndArray)
-                    {
-                        var jsonObject = await JObject.LoadAsync(jsonReader, HttpContext.RequestAborted);
-
-                        models.Add(ToBaseEntity(jsonObject));
-
-                        await jsonReader.ReadAsync(); // Read EndObject
-                    }
+                    return Ok(models);
                 }
                 else
                 {
-                    return BadRequest("Object or array is expected");
+                    return StatusCode(500, status);
                 }
-
-                try
-                {
-                    var api = new CrudAPI(Session, Company);
-                    var status = await api.Insert(models);
-
-                    if (status == ErrorCodes.Succes)
-                    {
-                        return Ok(models);
-                    }
-                    else
-                    {
-                        return StatusCode(500, status);
-                    }
-                }
-                catch (Exception e)
-                {
-                    return BadRequest(e.Message);
-                }
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e.Message);
             }
         }
 
