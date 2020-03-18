@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System;
 using System.Collections.Concurrent;
@@ -15,11 +16,13 @@ namespace UnicontaRest
     {
         private readonly ConcurrentDictionary<Credentials, Lazy<SemaphoreSlim>> _connectionLocks = new ConcurrentDictionary<Credentials, Lazy<SemaphoreSlim>>();
         private readonly IMemoryCache _memoryCache;
+        private readonly ILogger<UnicontaConnectionProvider> _logger;
         private readonly UnicontaRestOptions _options;
 
-        public UnicontaConnectionProvider(IMemoryCache memoryCache, IOptions<UnicontaRestOptions> options)
+        public UnicontaConnectionProvider(IMemoryCache memoryCache, ILogger<UnicontaConnectionProvider> logger, IOptions<UnicontaRestOptions> options)
         {
             _memoryCache = memoryCache;
+            _logger = logger;
             _options = options.Value;
         }
 
@@ -53,31 +56,50 @@ namespace UnicontaRest
             });
         }
 
+        private const int MAX_GET_COMPANIES_TRIALS = 5;
+
         private async Task<UnicontaConnectionDetails> ConnectAsync(Credentials credentials, Guid affiliateKey)
         {
-            var connection = new UnicontaConnection(APITarget.Live);
-            var session = new Session(connection);
-
-            var loggedIn = await session.LoginAsync(credentials.Username, credentials.Password, LoginType.API, affiliateKey);
-
-            if (loggedIn != ErrorCodes.Succes)
+            // Try and get company list multiple times as it seems to occasionally return null
+            for (var trial = 1; trial <= MAX_GET_COMPANIES_TRIALS; trial++)
             {
-                throw new Exception($"Unable to login, got error code: {loggedIn}");
+                var connection = new UnicontaConnection(APITarget.Live);
+                var session = new Session(connection);
+
+                var loggedIn = await session.LoginAsync(credentials.Username, credentials.Password, LoginType.API, affiliateKey);
+
+                if (loggedIn != ErrorCodes.Succes)
+                {
+                    throw new Exception($"Unable to login, got error code: {loggedIn}");
+                }
+
+                var companies = await session.GetCompanies();
+
+                if (companies is object)
+                {
+                    if (trial > 1)
+                    {
+                        _logger.LogWarning("Got companies after {Trials} trials", trial);
+                    }
+
+                    return new UnicontaConnectionDetails(session, companies);
+                }
             }
 
-            var companies = await session.GetCompanies();
-
-            return new UnicontaConnectionDetails()
-            {
-                Session = session,
-                Companies = companies
-            };
+            // Ensure that only a valid entry is ever inserted in the database
+            throw new Exception($"Unable to get company list after {MAX_GET_COMPANIES_TRIALS} trials, got null instead");
         }
     }
 
     public class UnicontaConnectionDetails
     {
-        public Session Session { get; set; }
-        public Company[] Companies { get; set; }
+        public Session Session { get; }
+        public Company[] Companies { get; }
+
+        public UnicontaConnectionDetails(Session session, Company[] companies)
+        {
+            Session = session;
+            Companies = companies;
+        }
     }
 }
