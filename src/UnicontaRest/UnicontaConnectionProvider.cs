@@ -45,7 +45,7 @@ namespace UnicontaRest
 
                     details = await ConnectAsync(credentials, _options.AffiliateKey);
 
-                    entry.SetAbsoluteExpiration(TimeSpan.FromMinutes(30));
+                    entry.SetAbsoluteExpiration(TimeSpan.FromMinutes(10));
 
                     return details;
                 }
