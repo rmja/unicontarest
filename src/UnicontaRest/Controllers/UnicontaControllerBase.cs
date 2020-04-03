@@ -50,6 +50,15 @@ namespace UnicontaRest.Controllers
             if (Session is null || Companies is null)
             {
                 logger.LogCritical("The uniconta connection is invalid {Session}, {Companies}", Session, Companies);
+                context.Result = StatusCode(StatusCodes.Status502BadGateway);
+                return;
+            }
+
+            if (!Session.LoggedIn)
+            {
+                logger.LogCritical("The session is not logged in");
+                context.Result = StatusCode(StatusCodes.Status502BadGateway);
+                return;
             }
 
             var routeValues = context.RouteData.Values;
