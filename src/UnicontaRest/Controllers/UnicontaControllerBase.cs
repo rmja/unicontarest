@@ -78,6 +78,13 @@ namespace UnicontaRest.Controllers
             {
                 Company = Companies.FirstOrDefault(x => x.CompanyId == companyId);
 
+                if (Company.GetType().GetField("Fields", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(Company) is null)
+                {
+                    // Make sure that the "Fields" field is loaded for the company
+                    // This is neede to make user defined fields work
+                    await Session.GetCompany(companyId, Company);
+                }
+
                 if (Company is null)
                 {
                     context.Result = NotFound();
