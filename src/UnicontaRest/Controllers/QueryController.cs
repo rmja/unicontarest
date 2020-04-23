@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Uniconta.API.System;
+using Uniconta.ClientTools.DataModel;
 using Uniconta.Common;
+using Uniconta.DataModel;
 
 namespace UnicontaRest.Controllers
 {
@@ -15,6 +17,11 @@ namespace UnicontaRest.Controllers
         public async Task<ActionResult<object>> Get([FromQuery] Dictionary<string, string> filter)
         {
             var predicates = filter.Select(x => PropValuePairEx.GenereteWhereElements(Type, x.Key, x.Value)).ToList();
+
+            if (predicates.Any(x => x is null))
+            {
+                return BadRequest("Invalid filter");
+            }
 
             if (predicates.Any(x => x.OrList.Count > 40))
             {
