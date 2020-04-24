@@ -25,7 +25,7 @@ namespace UnicontaRest.Controllers
 
         [HttpPost("Orders/{orderNumber:int}")] // Legacy
         [HttpPost("DebtorOrders/{orderNumber:int}")]
-        public async Task<ActionResult<InvoicePostingResult>> CreateDebtorInvoice(int orderNumber, bool simulate = false, CompanyLayoutType documentType = CompanyLayoutType.Invoice, string[] email = null)
+        public async Task<ActionResult<InvoicePostingResult>> CreateDebtorInvoice(int orderNumber, bool simulate = false, CompanyLayoutType documentType = CompanyLayoutType.Invoice, [FromQuery] string[] email = null)
         {
             var crudApi = new CrudAPI(Session, Company);
             var invoiceApi = new InvoiceAPI(Session, Company);
@@ -81,7 +81,7 @@ namespace UnicontaRest.Controllers
         }
 
         [HttpPost("CreditorOrders/{orderNumber:int}")]
-        public async Task<ActionResult<InvoicePostingResult>> CreateInvoice(int orderNumber, bool simulate = false, CompanyLayoutType documentType = CompanyLayoutType.Invoice, string[] email = null)
+        public async Task<ActionResult<InvoicePostingResult>> CreateInvoice(int orderNumber, bool simulate = false, CompanyLayoutType documentType = CompanyLayoutType.Invoice, [FromQuery] string[] email = null)
         {
             var crudApi = new CrudAPI(Session, Company);
             var invoiceApi = new InvoiceAPI(Session, Company);
