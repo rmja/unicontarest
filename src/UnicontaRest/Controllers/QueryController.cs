@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Uniconta.API.System;
-using Uniconta.ClientTools.DataModel;
 using Uniconta.Common;
-using Uniconta.DataModel;
 
 namespace UnicontaRest.Controllers
 {

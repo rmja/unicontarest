@@ -65,7 +65,12 @@ namespace UnicontaRest.Controllers
 
             if (routeValues.TryGetValue<string>("typeName", out var typeName))
             {
-                Type = _unicontaAssembly.GetType($"Uniconta.DataModel.{typeName}", throwOnError: false, ignoreCase: true);
+                Type = _unicontaAssembly.GetType($"Uniconta.ClientTools.DataModel.{typeName}Client", throwOnError: false, ignoreCase: true);
+
+                if (Type is null)
+                {
+                    Type = _unicontaAssembly.GetType($"Uniconta.DataModel.{typeName}", throwOnError: false, ignoreCase: true);
+                }
 
                 if (Type is null)
                 {
