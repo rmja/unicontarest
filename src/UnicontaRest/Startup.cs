@@ -71,7 +71,7 @@ namespace UnicontaRest
                     {
                         writer.WritePropertyName(property.PropertyName);
 
-                        if (property.PropertyType == typeof(TableFieldDataRow))
+                        if (property.PropertyType == typeof(TableFieldDataRow) && value.UserField is object)
                         {
                             writer.WriteStartArray();
 
