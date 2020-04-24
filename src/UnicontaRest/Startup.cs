@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
@@ -32,7 +31,7 @@ namespace UnicontaRest
                         options.SerializerSettings.ContractResolver = new DefaultContractResolver();
                         options.SerializerSettings.ReferenceLoopHandling = ReferenceLoopHandling.Ignore;
                         options.SerializerSettings.Converters.Add(new StringEnumConverter());
-                        options.SerializerSettings.Converters.Add(new TableFieldDataRowConverter());
+                        options.SerializerSettings.Converters.Add(new TableFieldDataConverter());
                     });
         }
 
@@ -44,23 +43,63 @@ namespace UnicontaRest
                 .UseEndpoints(endpoints => endpoints.MapControllers());
         }
 
-        public class TableFieldDataRowConverter : JsonConverter<TableFieldDataRow>
+        public class TableFieldDataConverter : JsonConverter<ITableFieldData>
         {
-            public override TableFieldDataRow ReadJson(JsonReader reader, Type objectType, TableFieldDataRow existingValue, bool hasExistingValue, JsonSerializer serializer)
+            public override bool CanRead => false;
+
+            public override ITableFieldData ReadJson(JsonReader reader, Type objectType, ITableFieldData existingValue, bool hasExistingValue, JsonSerializer serializer)
             {
                 throw new NotImplementedException();
             }
 
-            public override void WriteJson(JsonWriter writer, TableFieldDataRow value, JsonSerializer serializer)
+            public override void WriteJson(JsonWriter writer, ITableFieldData value, JsonSerializer serializer)
             {
-                writer.WriteStartArray();
-
-                for (var i = 0; i < value.Count; i++)
+                if (value == null)
                 {
-                    writer.WriteValue(value[i]);
+                    writer.WriteNull();
+
+                    return;
                 }
 
-                writer.WriteEndArray();
+                var contract = (JsonObjectContract)serializer.ContractResolver.ResolveContract(value.GetType());
+
+                writer.WriteStartObject();
+
+                foreach (var property in contract.Properties)
+                {
+                    if (!property.Ignored)
+                    {
+                        writer.WritePropertyName(property.PropertyName);
+
+                        if (property.PropertyType == typeof(TableFieldDataRow))
+                        {
+                            writer.WriteStartArray();
+
+                            foreach (var field in value.UserFieldDef())
+                            {
+                                var fieldValue = value.GetUserFieldIdx(field.Index);
+                                writer.WriteValue(fieldValue);
+                            }
+
+                            writer.WriteEndArray();
+                        }
+                        else
+                        {
+                            var propertyValue = property.ValueProvider.GetValue(value);
+
+                            if (Object.ReferenceEquals(value, propertyValue))
+                            {
+                                writer.WriteNull();
+                            }
+                            else
+                            {
+                                serializer.Serialize(writer, propertyValue);
+                            }
+                        }
+                    }
+                }
+
+                writer.WriteEndObject();
             }
         }
     }
