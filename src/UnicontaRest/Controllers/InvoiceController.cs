@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -15,6 +16,13 @@ namespace UnicontaRest.Controllers
     [ApiController]
     public class InvoiceController : UnicontaControllerBase
     {
+        private readonly ILogger<InvoiceController> _logger;
+
+        public InvoiceController(ILogger<InvoiceController> logger)
+        {
+            _logger = logger;
+        }
+
         [HttpPost("Orders/{orderNumber:int}")] // Legacy
         [HttpPost("DebtorOrders/{orderNumber:int}")]
         public async Task<ActionResult<InvoicePostingResult>> CreateDebtorInvoice(int orderNumber, bool simulate = false, CompanyLayoutType documentType = CompanyLayoutType.Invoice, string[] email = null)
@@ -33,13 +41,23 @@ namespace UnicontaRest.Controllers
             var orderLines = await crudApi.Query<DebtorOrderLineClient>(order);
             var emails = string.Join(';', email ?? Array.Empty<string>());
 
+            var sendEmail = !string.IsNullOrEmpty(emails);
+            if (sendEmail)
+            {
+                _logger.LogInformation("Sending email to: {Emails}", emails);
+            }
+            else
+            {
+                _logger.LogInformation("No email address specified, skipping...");
+            }
+
             var invoice = await invoiceApi.PostInvoice(
                 order, orderLines, DateTime.Now,
                 InvoiceNumber: 0 /* Autogenerate */,
                 Simulate: simulate,
                 InvoiceType: null,
                 InvTransType: null,
-                SendEmail: !string.IsNullOrEmpty(emails),
+                SendEmail: sendEmail,
                 ShowInvoice: false,
                 DocumentType: documentType,
                 Emails: emails,
@@ -79,13 +97,23 @@ namespace UnicontaRest.Controllers
             var orderLines = await crudApi.Query<CreditorOrderLineClient>(order);
             var emails = string.Join(';', email ?? Array.Empty<string>());
 
+            var sendEmail = !string.IsNullOrEmpty(emails);
+            if (sendEmail)
+            {
+                _logger.LogInformation("Sending email to: {Emails}", emails);
+            }
+            else
+            {
+                _logger.LogInformation("No email address specified, skipping...");
+            }
+
             var invoice = await invoiceApi.PostInvoice(
                 order, orderLines, DateTime.Now,
                 InvoiceNumber: 0 /* Autogenerate */,
                 Simulate: simulate,
                 InvoiceType: null,
                 InvTransType: null,
-                SendEmail: !string.IsNullOrEmpty(emails),
+                SendEmail: sendEmail,
                 ShowInvoice: true,
                 DocumentType: documentType,
                 Emails: emails,
