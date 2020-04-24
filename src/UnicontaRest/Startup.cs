@@ -62,6 +62,7 @@ namespace UnicontaRest
                 }
 
                 var contract = (JsonObjectContract)serializer.ContractResolver.ResolveContract(value.GetType());
+                var userFields = value.UserFieldDef();
 
                 writer.WriteStartObject();
 
@@ -71,7 +72,7 @@ namespace UnicontaRest
                     {
                         writer.WritePropertyName(property.PropertyName);
 
-                        if (property.PropertyType == typeof(TableFieldDataRow) && value.UserField is object)
+                        if (property.PropertyType == typeof(TableFieldDataRow) && userFields is object)
                         {
                             writer.WriteStartArray();
 
