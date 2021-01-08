@@ -12,7 +12,6 @@ using System.Threading.Tasks;
 using Uniconta.API.System;
 using Uniconta.ClientTools.DataModel;
 using Uniconta.Common;
-using Uniconta.DataModel;
 
 namespace UnicontaRest.Controllers
 {

@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -31,6 +33,7 @@ namespace UnicontaRest.Controllers
 
             var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<UnicontaControllerBase>>();
             var connectionProvider = context.HttpContext.RequestServices.GetRequiredService<UnicontaConnectionProvider>();
+            var cache = context.HttpContext.RequestServices.GetRequiredService<IMemoryCache>();
 
             try
             {
@@ -83,11 +86,21 @@ namespace UnicontaRest.Controllers
             {
                 Company = Companies.FirstOrDefault(x => x.CompanyId == companyId);
 
-                if (Company.GetType().GetField("Fields", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(Company) is null)
+                if (Company.GetUserFields() is null)
                 {
-                    // Make sure that the "Fields" field is loaded for the company
-                    // This is neede to make user defined fields work
-                    await Session.GetCompany(companyId, Company);
+                    var fields = await cache.GetOrCreateAsync($"Companines:{Company}:UserFields", async entry =>
+                    {
+                        entry.SetAbsoluteExpiration(TimeSpan.FromDays(1));
+                        
+                        // Make sure that the "Fields" field is loaded for the company
+                        // This is neede to make user defined fields work
+                        var company = await Session.GetCompany(companyId, Company);
+
+                        var fields = company.GetUserFields();
+                        return fields;
+                    });
+
+                    Company.SetUserFields(fields);
                 }
 
                 if (Company is null)
@@ -98,6 +111,21 @@ namespace UnicontaRest.Controllers
             }
 
             await next();
+        }
+    }
+
+    public static class CompanyExtensions
+    {
+        public static object[] GetUserFields(this Company company)
+        {
+            var fields = typeof(Company).GetField("Fields", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(company);
+
+            if (fields is null)
+            {
+                return null;
+            }
+
+            return ((IEnumerable)fields).Cast<object>().ToArray();
         }
     }
 }
