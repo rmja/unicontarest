@@ -66,11 +66,9 @@ namespace UnicontaRest.Controllers
                 // Special handling of debtor orders where it may be needed to set a debtor as master
                 if (Type == typeof(DebtorOrderClient))
                 {
-                    var orders = models.OfType<DebtorOrderClient>().ToList();
-                    var debtorAccounts = new HashSet<string>(orders.Select(x => x.Account));
-
-                    foreach (var account in debtorAccounts)
+                    foreach (var orders in models.OfType<DebtorOrderClient>().GroupBy(x => x.Account))
                     {
+                        var account = orders.Key;
                         var debtors = await api.Query<DebtorClient>(new[] {
                             PropValuePair.GenereteWhereElements(typeof(DebtorClient).GetProperty(nameof(DebtorClient.Account)), account)
                         });
@@ -80,7 +78,7 @@ namespace UnicontaRest.Controllers
                             return BadRequest($"Unable to find debtor with account number {account}");
                         }
 
-                        foreach (var order in orders.Where(x => x.Account == account))
+                        foreach (var order in orders)
                         {
                             order.SetMaster(debtors[0]);
                         }
