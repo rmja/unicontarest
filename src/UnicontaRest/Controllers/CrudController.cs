@@ -10,7 +10,9 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Uniconta.API.System;
+using Uniconta.ClientTools.DataModel;
 using Uniconta.Common;
+using Uniconta.DataModel;
 
 namespace UnicontaRest.Controllers
 {
@@ -21,7 +23,7 @@ namespace UnicontaRest.Controllers
         private static readonly JsonSerializer _serializer = JsonSerializer.CreateDefault();
 
         [HttpPost]
-        public async Task<ActionResult> Create()
+        public async Task<ActionResult> Create([FromQuery] Dictionary<string, string> debtor)
         {
             using var reader = new HttpRequestStreamReader(Request.Body, Encoding.UTF8);
             using var jsonReader = new JsonTextReader(reader);
@@ -60,6 +62,24 @@ namespace UnicontaRest.Controllers
             try
             {
                 var api = new CrudAPI(Session, Company);
+
+                // Special handling of debtor orders where it may be needed to set a debtor as master
+                if (Type == typeof(DebtorOrderClient) && debtor is object && debtor.Count > 0)
+                {
+                    var debtorPredicates = debtor.Select(x => PropValuePairEx.GenereteWhereElements(typeof(DebtorClient), x.Key, x.Value)).ToList();
+                    var masters = await api.Query<DebtorClient>(debtorPredicates);
+                    
+                    if (masters.Length != 1)
+                    {
+                        return BadRequest("The master debtor query did not return exactly one debtor");
+                    }
+
+                    foreach (var model in models.OfType<DebtorOrderClient>())
+                    {
+                        model.SetMaster(masters[0]);
+                    }
+                }
+
                 var status = await api.Insert(models);
 
                 if (status == ErrorCodes.Succes)
