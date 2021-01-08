@@ -23,7 +23,7 @@ namespace UnicontaRest.Controllers
         private static readonly JsonSerializer _serializer = JsonSerializer.CreateDefault();
 
         [HttpPost]
-        public async Task<ActionResult> Create([FromQuery] Dictionary<string, string> debtor)
+        public async Task<ActionResult> Create()
         {
             using var reader = new HttpRequestStreamReader(Request.Body, Encoding.UTF8);
             using var jsonReader = new JsonTextReader(reader);
@@ -64,19 +64,26 @@ namespace UnicontaRest.Controllers
                 var api = new CrudAPI(Session, Company);
 
                 // Special handling of debtor orders where it may be needed to set a debtor as master
-                if (Type == typeof(DebtorOrderClient) && debtor is object && debtor.Count > 0)
+                if (Type == typeof(DebtorOrderClient))
                 {
-                    var debtorPredicates = debtor.Select(x => PropValuePairEx.GenereteWhereElements(typeof(DebtorClient), x.Key, x.Value)).ToList();
-                    var masters = await api.Query<DebtorClient>(debtorPredicates);
-                    
-                    if (masters.Length != 1)
-                    {
-                        return BadRequest("The master debtor query did not return exactly one debtor");
-                    }
+                    var orders = models.OfType<DebtorOrderClient>().ToList();
+                    var debtorAccounts = new HashSet<string>(orders.Select(x => x.Account));
 
-                    foreach (var model in models.OfType<DebtorOrderClient>())
+                    foreach (var account in debtorAccounts)
                     {
-                        model.SetMaster(masters[0]);
+                        var debtors = await api.Query<DebtorClient>(new[] {
+                            PropValuePair.GenereteWhereElements(typeof(DebtorClient).GetProperty(nameof(DebtorClient.Account)), account)
+                        });
+
+                        if (debtors.Length != 1)
+                        {
+                            return BadRequest($"Unable to find debtor with account number {account}");
+                        }
+
+                        foreach (var order in orders.Where(x => x.Account == account))
+                        {
+                            order.SetMaster(debtors[0]);
+                        }
                     }
                 }
 
