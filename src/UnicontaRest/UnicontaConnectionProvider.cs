@@ -66,8 +66,6 @@ namespace UnicontaRest
             return connection;
         }
 
-        
-
         private async Task<UnicontaConnectionDetails> ConnectAsync(Credentials credentials, Guid affiliateKey)
         {
             // Try and get company list multiple times as it seems to occasionally return null

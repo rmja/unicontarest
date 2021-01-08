@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.JsonPatch;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Extensions.Caching.Memory;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -20,6 +21,12 @@ namespace UnicontaRest.Controllers
     public class CrudController : UnicontaControllerBase
     {
         private static readonly JsonSerializer _serializer = JsonSerializer.CreateDefault();
+        private readonly IMemoryCache _cache;
+
+        public CrudController(IMemoryCache cache)
+        {
+            _cache = cache;
+        }
 
         [HttpPost]
         public async Task<ActionResult> Create()
@@ -32,13 +39,13 @@ namespace UnicontaRest.Controllers
                 await jsonReader.ReadAsync(); // Read None
             }
 
-            var models = new List<UnicontaBaseEntity>();
+            var models = new List<(UnicontaBaseEntity, JObject)>();
 
             if (jsonReader.TokenType == JsonToken.StartObject)
             {
                 var jsonObject = await JObject.LoadAsync(jsonReader, HttpContext.RequestAborted);
-
-                models.Add(ToBaseEntity(jsonObject));
+                var model = ToBaseEntity(jsonObject);
+                models.Add((model, jsonObject));
             }
             else if (jsonReader.TokenType == JsonToken.StartArray)
             {
@@ -47,8 +54,8 @@ namespace UnicontaRest.Controllers
                 while (jsonReader.TokenType != JsonToken.EndArray)
                 {
                     var jsonObject = await JObject.LoadAsync(jsonReader, HttpContext.RequestAborted);
-
-                    models.Add(ToBaseEntity(jsonObject));
+                    var model = ToBaseEntity(jsonObject);
+                    models.Add((model, jsonObject));
 
                     await jsonReader.ReadAsync(); // Read EndObject
                 }
@@ -65,26 +72,13 @@ namespace UnicontaRest.Controllers
                 // Special handling of debtor orders where it may be needed to set a debtor as master
                 if (Type == typeof(DebtorOrderClient))
                 {
-                    foreach (var orders in models.OfType<DebtorOrderClient>().GroupBy(x => x.Account))
+                    foreach (var (model, jsonObject) in models)
                     {
-                        var account = orders.Key;
-                        var debtors = await api.Query<DebtorClient>(new[] {
-                            PropValuePair.GenereteWhereElements(typeof(DebtorClient).GetProperty(nameof(DebtorClient.Account)), account)
-                        });
-
-                        if (debtors.Length != 1)
-                        {
-                            return BadRequest($"Unable to find debtor with account number {account}");
-                        }
-
-                        foreach (var order in orders)
-                        {
-                            order.SetMaster(debtors[0]);
-                        }
+                        await AugmentDebtorOrderMasterAsync(api, (DebtorOrderClient)model, jsonObject);
                     }
                 }
-
-                var status = await api.Insert(models);
+                
+                var status = await api.Insert(models.Select(x => x.Item1));
 
                 if (status == ErrorCodes.Succes)
                 {
@@ -170,6 +164,42 @@ namespace UnicontaRest.Controllers
             }
 
             return entity;
+        }
+
+        private async Task AugmentDebtorOrderMasterAsync(CrudAPI api, DebtorOrderClient order, JObject jsonObject)
+        {
+            var account = order.Account;
+            var dcAccount = await _cache.GetOrCreateAsync($"Debtors:{account}", async entry =>
+            {
+                entry.SetAbsoluteExpiration(TimeSpan.FromDays(1));
+
+                var debtors = await api.Query<DebtorClient>(new[] {
+                            PropValuePair.GenereteWhereElements(typeof(DebtorClient).GetProperty(nameof(DebtorClient.Account)), account)
+                        });
+
+                if (debtors.Length != 1)
+                {
+                    throw new Exception($"Unable to find debtor with account number {account}");
+                }
+
+                return debtors[0];
+            });
+
+            var assignedProperties = new HashSet<string>(
+                jsonObject.Properties().Select(x => x.Name).Concat(jsonObject.Properties().Select(x => $"_{x.Name}")), StringComparer.OrdinalIgnoreCase);
+            // This is copied from the disassembly of Uniconta.DataModel.DCOrder.SetMaster()
+            order._DCAccount ??= dcAccount._Account;
+            order._Currency = assignedProperties.Contains(nameof(DebtorOrderClient._Currency)) ? order._Currency : dcAccount._Currency;
+            order._EndDiscountPct = assignedProperties.Contains(nameof(DebtorOrderClient._EndDiscountPct)) ? order._EndDiscountPct : dcAccount._EndDiscountPct;
+            order._LayoutGroup ??= dcAccount._LayoutGroup;
+            order._PriceList ??= dcAccount._PriceList;
+            order._Employee ??= dcAccount._Employee;
+            order._Dim1 ??= dcAccount._Dim1;
+            order._Dim2 ??= dcAccount._Dim2;
+            order._Dim3 ??= dcAccount._Dim3;
+            order._Dim4 ??= dcAccount._Dim4;
+            order._Dim5 ??= dcAccount._Dim5;
+            //order._RowId = 0; // Not assignable, but 0 should be the default value
         }
 
         private void TrySetBackingField(object instance, PropertyInfo property, object value)
