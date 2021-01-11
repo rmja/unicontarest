@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
@@ -86,21 +87,21 @@ namespace UnicontaRest.Controllers
             {
                 Company = Companies.FirstOrDefault(x => x.CompanyId == companyId);
 
-                if (Company.GetUserFields() is null)
+                if (Company.GetUserFieldDefinitions() is null)
                 {
                     var fields = await cache.GetOrCreateAsync($"Companines:{Company}:UserFields", async entry =>
                     {
                         entry.SetAbsoluteExpiration(TimeSpan.FromDays(1));
-                        
+
                         // Make sure that the "Fields" field is loaded for the company
                         // This is neede to make user defined fields work
                         var company = await Session.GetCompany(companyId, Company);
 
-                        var fields = company.GetUserFields();
+                        var fields = company.GetUserFieldDefinitions();
                         return fields;
                     });
 
-                    Company.SetUserFields(fields);
+                    Company.SetUserFieldDefinitions(fields);
                 }
 
                 if (Company is null)
@@ -116,16 +117,14 @@ namespace UnicontaRest.Controllers
 
     public static class CompanyExtensions
     {
-        public static object[] GetUserFields(this Company company)
+        public static Dictionary<int, TableField[]> GetUserFieldDefinitions(this Company company)
         {
-            var fields = typeof(Company).GetField("Fields", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(company);
+            return typeof(Company).GetField("Fields", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(company) as Dictionary<int, TableField[]>;
+        }
 
-            if (fields is null)
-            {
-                return null;
-            }
-
-            return ((IEnumerable)fields).Cast<object>().ToArray();
+        public static void SetUserFieldDefinitions(this Company company, Dictionary<int, TableField[]> fields)
+        {
+            typeof(Company).GetField("Fields", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(company, fields);
         }
     }
 }
