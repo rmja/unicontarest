@@ -77,12 +77,14 @@ namespace UnicontaRest.Controllers
                         await AugmentDebtorOrderMasterAsync(api, (DebtorOrderClient)model, jsonObject);
                     }
                 }
+
+                var entities = models.Select(x => x.Item1).ToArray();
                 
-                var status = await api.Insert(models.Select(x => x.Item1));
+                var status = await api.Insert(entities);
 
                 if (status == ErrorCodes.Succes)
                 {
-                    return Ok(models);
+                    return Ok(entities);
                 }
                 else
                 {
