@@ -1,9 +1,14 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Uniconta.API.Service;
 using Uniconta.API.System;
+using Uniconta.ClientTools.DataModel;
 using Uniconta.Common;
+using Uniconta.Common.User;
 
 namespace UnicontaRest.Controllers
 {
@@ -11,6 +16,13 @@ namespace UnicontaRest.Controllers
     [ApiController]
     public class QueryController : UnicontaControllerBase
     {
+        private readonly UnicontaRestOptions _options;
+
+        public QueryController(IOptions<UnicontaRestOptions> options)
+        {
+            _options = options.Value;
+        }
+
         [HttpGet]
         public async Task<ActionResult<object>> Get([FromQuery] Dictionary<string, string> filter)
         {
@@ -35,6 +47,32 @@ namespace UnicontaRest.Controllers
 
             var result = resultTask.GetType().GetProperty("Result").GetValue(resultTask);
             return result;
+        }
+
+        [HttpGet("/Companies/{companyId:int}/QueryTest/DebtorOrders/{orderId:int}")]
+        public async Task<ActionResult<DebtorOrderLineClient[]>> GetDebtorOrder(int companyId, int orderId)
+        {
+            if (!Request.TryGetCredentials(out var credentials))
+            {
+                return Unauthorized();
+            }
+
+            var connection = new UnicontaConnection(APITarget.Live);
+            var session = new Session(connection);
+            var loginResult = await session.LoginAsync(credentials.Username, credentials.Password, LoginType.API, _options.AffiliateKey);
+            if (loginResult != ErrorCodes.Succes)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, loginResult);
+            }
+            
+            var company = await session.GetCompany(companyId);
+            var api = new QueryAPI(session, company);
+            var queryResult = await api.Query<DebtorOrderLineClient>(new[]
+            {
+                PropValuePair.GenereteWhereElements(typeof(DebtorOrderClient).GetProperty("OrderNumber"), orderId.ToString())
+            });
+
+            return queryResult;
         }
     }
 }
