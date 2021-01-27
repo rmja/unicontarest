@@ -49,8 +49,9 @@ namespace UnicontaRest.Controllers
             return result;
         }
 
+        // http://localhost:5000/Companies/12114/QueryTest/DebtorOrders/119
         [HttpGet("/Companies/{companyId:int}/QueryTest/DebtorOrders/{orderId:int}")]
-        public async Task<ActionResult<DebtorOrderLineClient[]>> GetDebtorOrder(int companyId, int orderId)
+        public async Task<ActionResult<DebtorOrderClient>> GetDebtorOrder(int companyId, int orderId)
         {
             if (!Request.TryGetCredentials(out var credentials))
             {
@@ -66,13 +67,14 @@ namespace UnicontaRest.Controllers
             }
             
             var company = await session.GetCompany(companyId);
+            await session.GetCompany(companyId, Company);
             var api = new QueryAPI(session, company);
-            var queryResult = await api.Query<DebtorOrderLineClient>(new[]
+            var queryResult = await api.Query<DebtorOrderClient>(new[]
             {
-                PropValuePair.GenereteWhereElements(typeof(DebtorOrderClient).GetProperty("OrderNumber"), orderId.ToString())
+                PropValuePair.GenereteWhereElements("_OrderNumber", typeof(int), orderId.ToString())
             });
 
-            return queryResult;
+            return queryResult.FirstOrDefault();
         }
     }
 }
