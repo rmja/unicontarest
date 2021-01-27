@@ -89,7 +89,7 @@ namespace UnicontaRest.Controllers
 
                 if (Company.GetUserFieldDefinitions() is null)
                 {
-                    var fields = await cache.GetOrCreateAsync($"Companines:{Company}:UserFields", async entry =>
+                    var (fields, tables) = await cache.GetOrCreateAsync($"Companines:{companyId}:UserFieldsAndTables", async entry =>
                     {
                         entry.SetAbsoluteExpiration(TimeSpan.FromDays(1));
 
@@ -98,10 +98,13 @@ namespace UnicontaRest.Controllers
                         var company = await Session.GetCompany(companyId, Company);
 
                         var fields = company.GetUserFieldDefinitions();
-                        return fields;
+                        return (fields, company.UserTables);
                     });
 
-                    Company.SetUserFieldDefinitions(fields);
+                    Company.SetUserField(fields);
+                    Company.UserTables = tables;
+                    var AddCompany = Company.GetType().GetMethod("AddCompany", BindingFlags.Static | BindingFlags.NonPublic);
+                    AddCompany.Invoke(null, new object[] { Company });
                 }
 
                 if (Company is null)
@@ -120,11 +123,6 @@ namespace UnicontaRest.Controllers
         public static Dictionary<int, TableField[]> GetUserFieldDefinitions(this Company company)
         {
             return typeof(Company).GetField("Fields", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(company) as Dictionary<int, TableField[]>;
-        }
-
-        public static void SetUserFieldDefinitions(this Company company, Dictionary<int, TableField[]> fields)
-        {
-            typeof(Company).GetField("Fields", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(company, fields);
         }
     }
 }
