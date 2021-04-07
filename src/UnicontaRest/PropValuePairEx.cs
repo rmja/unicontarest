@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using Uniconta.Common;
 
 namespace UnicontaRest
@@ -29,6 +30,16 @@ namespace UnicontaRest
                 foreach (var or in values.Skip(1))
                 {
                     result.OrList.Add(new PropValueNode() { Value = or });
+                }
+
+                if (result.OrList.Count > 40)
+                {
+                    // The maximum number of OR's in a filter is 40
+                    // but it seems that if we send an SQL where instead, then we are good
+
+                    var sql = new StringBuilder();
+                    sql.AppendJoin(" or ", result.OrList.Select(value => $"{result.Prop} = {value.Value}"));
+                    result = PropValuePair.GenereteWhere(sql.ToString());
                 }
             }
 

@@ -23,17 +23,25 @@ namespace UnicontaRest.Controllers
             _options = options.Value;
         }
 
+        // http://localhost:5000/Companies/12114/Query/DebtorOrders?query=orderNumber=1
         [HttpGet]
         public async Task<ActionResult<object>> Get([FromQuery] Dictionary<string, string> filter)
         {
-            var predicates = filter.Select(x => PropValuePairEx.GenereteWhereElements(Type, x.Key, x.Value)).ToList();
+            var predicates = new List<PropValuePair>(filter.Count);
+
+            if (filter.Remove("query", out var sqlWhere))
+            {
+                predicates.Add(PropValuePair.GenereteWhere(sqlWhere));
+            }
+
+            predicates.AddRange(filter.Select(x => PropValuePairEx.GenereteWhereElements(Type, x.Key, x.Value)));
 
             if (predicates.Any(x => x is null))
             {
                 return BadRequest("Invalid filter");
             }
 
-            if (predicates.Any(x => x.OrList.Count > 40))
+            if (predicates.Any(x => x.OrList is object && x.OrList.Count > 40))
             {
                 return BadRequest("The maximum number of OR's in a filter is 40");
             }
@@ -47,6 +55,34 @@ namespace UnicontaRest.Controllers
 
             var result = resultTask.GetType().GetProperty("Result").GetValue(resultTask);
             return result;
+        }
+
+        // http://localhost:5000/Companies/12114/QueryTest/DebtorOrders?query=DeliveryName = 'BodyLux'
+        [HttpGet("/Companies/{companyId:int}/QueryTest/DebtorOrders")]
+        public async Task<ActionResult<DebtorOrderClient[]>> GetDebtorOrders(int companyId, int orderId, string query)
+        {
+            if (!Request.TryGetCredentials(out var credentials))
+            {
+                return Unauthorized();
+            }
+
+            var connection = new UnicontaConnection(APITarget.Live);
+            var session = new Session(connection);
+            var loginResult = await session.LoginAsync(credentials.Username, credentials.Password, LoginType.API, _options.AffiliateKey);
+            if (loginResult != ErrorCodes.Succes)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, loginResult);
+            }
+
+            var company = await session.GetCompany(companyId);
+            await session.GetCompany(companyId, Company);
+            var api = new QueryAPI(session, company);
+            var queryResult = await api.Query<DebtorOrderClient>(new[]
+            {
+                PropValuePair.GenereteWhere(query)
+            });
+
+            return queryResult;
         }
 
         // http://localhost:5000/Companies/12114/QueryTest/DebtorOrders/119
