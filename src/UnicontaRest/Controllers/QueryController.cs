@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -25,36 +26,69 @@ namespace UnicontaRest.Controllers
 
         // http://localhost:5000/Companies/12114/Query/DebtorOrders?query=orderNumber=1
         [HttpGet]
-        public async Task<ActionResult<object>> Get([FromQuery] Dictionary<string, string> filter)
+        public async Task<ActionResult<object[]>> Get([FromQuery] Dictionary<string, string> filter)
         {
-            var predicates = new List<PropValuePair>(filter.Count);
+            var allPredicates = new List<PropValuePair>(filter.Count);
+            allPredicates.AddRange(filter.Select(x => PropValuePairEx.GenereteWhereElements(Type, x.Key, x.Value)));
 
-            if (filter.Remove("query", out var sqlWhere))
-            {
-                predicates.Add(PropValuePair.GenereteWhere(sqlWhere));
-            }
-
-            predicates.AddRange(filter.Select(x => PropValuePairEx.GenereteWhereElements(Type, x.Key, x.Value)));
-
-            if (predicates.Any(x => x is null))
+            if (allPredicates.Any(x => x is null))
             {
                 return BadRequest("Invalid filter");
             }
 
-            if (predicates.Any(x => x.OrList is object && x.OrList.Count > 40))
+            var serverPredicates = new List<PropValuePair>();
+            var clientPredicates = new List<Func<object, bool>>();
+
+            foreach (var predicate in allPredicates)
             {
-                return BadRequest("The maximum number of OR's in a filter is 40");
+                // The maximum number of OR's in a filter run on the uniconta server is 40.
+                if (predicate.OrList is object && predicate.OrList.Count > 40)
+                {
+                    var orList = new HashSet<string>(predicate.OrList.Select(x => x.Value));
+
+                    if (predicate.Prop.StartsWith('_'))
+                    {
+                        var field = Type.GetField(predicate.Prop);
+                        clientPredicates.Add(item => orList.Contains(field.GetValue(item).ToString()));
+                    }
+                    else
+                    {
+                        var property = Type.GetProperty(predicate.Prop);
+                        clientPredicates.Add(item => orList.Contains(property.GetValue(item).ToString()));
+                    }
+                }
+                else
+                {
+                    serverPredicates.Add(predicate);
+                }
             }
 
             var api = new QueryAPI(Session, Company);
             var queryMethod = api.GetType().GetMethods().First(x => x.Name == nameof(QueryAPI.Query) && x.IsGenericMethod && x.GetParameters().FirstOrDefault()?.ParameterType == typeof(IEnumerable<PropValuePair>));
             var genericQueryMethod = queryMethod.MakeGenericMethod(Type);
-            var resultTask = (Task)genericQueryMethod.Invoke(api, new object[] { predicates.AsEnumerable() });
+            var resultTask = (Task)genericQueryMethod.Invoke(api, new object[] { serverPredicates.AsEnumerable() });
 
             await resultTask;
 
-            var result = resultTask.GetType().GetProperty("Result").GetValue(resultTask);
-            return result;
+            var results = (object[])resultTask.GetType().GetProperty("Result").GetValue(resultTask);
+
+            if (clientPredicates.Count == 0)
+            {
+                return results;
+            }
+
+            return results.Where(item =>
+            {
+                foreach (var predicate in clientPredicates)
+                {
+                    if (!predicate(item))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            }).ToArray();
         }
 
         // http://localhost:5000/Companies/12114/QueryTest/DebtorOrders?query=DeliveryName = 'BodyLux'
